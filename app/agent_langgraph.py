@@ -115,14 +115,14 @@ def build_graph(files: List[Dict]):
 
     builder.add_node("analyze_file", RunnableLambda(analyze_file))
     builder.add_node("collect_result", RunnableLambda(collect_result))
-    builder.add_node("add_inline_comments", RunnableLambda(add_inline_comments))
+    # builder.add_node("add_inline_comments", RunnableLambda(add_inline_comments))  --> add if you want inline comments
     builder.add_node("increment_index", RunnableLambda(increment_index))
     builder.add_node("cleanup_state", RunnableLambda(cleanup_state))
 
     builder.set_entry_point("analyze_file")
     builder.add_edge("analyze_file", "collect_result")
-    builder.add_edge("collect_result", "add_inline_comments")
-    builder.add_edge("add_inline_comments", "increment_index")
+    # builder.add_edge("collect_result", "add_inline_comments")  --> add if want in line comments
+    builder.add_edge("collect_result", "increment_index")
 
     def should_continue(state: Dict):
         return "analyze_file" if state["index"] < len(state["files"]) else "cleanup_state"

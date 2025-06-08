@@ -5,6 +5,13 @@ def generate_github_markdown_review(data):
     lines = []
     logger.info("Starting to generate GitHub markdown review.")
 
+    # ✅ Handle completely empty input
+    if not data:
+        lines.append("### 📄 `Unknown File`\n")
+        lines.append("> 🔎 **Summary**: 0 issue(s), 0 critical\n")
+        logger.info("Completed generating GitHub markdown review.")
+        return "\n".join(lines)
+
     for review in data:
         filename = review.get("filename", "Unknown File")
         lines.append(f"### 📄 `{filename}`")
