@@ -4,8 +4,8 @@ from app.github import parse_repo_url, fetch_pr_files, fetch_file_content
 import asyncio
 from app.agent_langgraph import build_graph
 from app.github import post_general_pr_comment
-from app.utils import code_review_json_to_markdown
-from app.lib.logger import logger  # <-- Add this import
+from app.utils import generate_github_markdown_review
+from app.lib.logger import logger  
 
 @celery_app.task(bind=True)
 def analyze_pr_task(self, repo_url, pr_number, github_token):
@@ -33,7 +33,8 @@ def analyze_pr_task(self, repo_url, pr_number, github_token):
         final_state = graph.invoke(state)
         logger.info("Graph execution complete.")
 
-        markdown_comments = code_review_json_to_markdown(final_state["results"])
+        # markdown_comments = code_review_json_to_markdown(final_state["results"])
+        markdown_comments = generate_github_markdown_review(final_state['results'])
         logger.info("Posting general PR comment with markdown summary.")
         post_general_pr_comment(owner, repo, pr_number, str(markdown_comments), github_token)
 
