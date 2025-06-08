@@ -1,4 +1,4 @@
-# 🛠️ Setting Up a Virtual Environment (venv)
+# 🛠️ Setting Up the Project and a Virtual Environment (venv) locally
 ### Step 1: Create the venv
 
 `python3 -m venv venv`
@@ -44,3 +44,18 @@ bash
 ## Access the UI
 
 `localhost:8000/review-pr`
+
+
+
+<br>
+<br>
+
+
+# If you don't want to all of the above Shit : JUST HIT 
+
+`docker compose up --build -d`
+
+### 🚀 And Enjoy
+
+        localhost:8000/docs         ---> for API contract
+        localhost:8000/review-pr    ---> for UI
