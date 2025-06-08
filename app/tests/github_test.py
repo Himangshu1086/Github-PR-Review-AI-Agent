@@ -38,7 +38,7 @@ async def test_fetch_file_content(mock_get):
     mock_response.json.return_value = {"content": encoded}
     mock_get.return_value = mock_response
 
-    content = await fetch_file_content("user", "repo", "file.py", "ghp_xxx")
+    content = await fetch_file_content("user", "repo", "file.py", "37dwd2e3" ,"ghp_xxx")
     assert content.strip() == 'print("hello")'
 
 # === post_general_pr_comment ===

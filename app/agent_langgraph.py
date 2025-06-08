@@ -31,15 +31,38 @@ def analyze_file(state: Dict) -> Dict:
         state['owner'] = file['owner']
         state['repo'] = file['repo']
         state['pr_number'] = file['pr_number'] 
-        prompt = make_review_prompt(file["filename"], file["content"])
-        logger.debug(f"Prompt sent to LLM: {prompt[:200]}...")  # Log first 200 chars
-        response = llm.invoke([HumanMessage(content=prompt)]).content
-        logger.info(f"Received LLM response for {file['filename']}")
-        return {**state, "current_result": {"filename": file["filename"], "code_review": json.loads(response)}}
+
+        content_lines = file["content"].splitlines()
+        chunk_size = 500  # Adjust as needed to stay well below token limit
+        results = []
+
+        for i in range(0, len(content_lines), chunk_size):
+            chunk = content_lines[i:i+chunk_size]
+            chunk_text = "\n".join(chunk)
+            prompt = make_review_prompt(file["filename"], chunk_text)
+            logger.debug(f"Prompt sent to LLM (lines {i+1}-{i+len(chunk)}): {prompt[:200]}...")
+            response = llm.invoke([HumanMessage(content=prompt)]).content
+            try:
+                review = json.loads(response)
+            except Exception as e:
+                logger.error(f"Failed to parse LLM response as JSON for chunk {i//chunk_size+1}: {e}")
+                review = {"error": f"Failed to parse LLM response: {str(e)}", "raw_response": response}
+            results.append(review)
+
+        # Aggregate all chunk reviews into one result
+        aggregated_review = {
+            "filename": file["filename"],
+            "code_review": results
+        }
+
+        logger.info(f"Received LLM responses for all chunks of {file['filename']}")
+        return {**state, "current_result": aggregated_review}
     except Exception as e:
         logger.error(f"Error in analyze_file: {e}")
         file = state.get("current_file", {})
         return {**state, "current_result": {"filename": file.get("filename", "unknown"), "code_review": str(e)}}
+
+
 
 def collect_result(state: Dict) -> Dict:
     try:

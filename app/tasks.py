@@ -3,7 +3,7 @@ import time
 from app.github import parse_repo_url, fetch_pr_files, fetch_file_content
 import asyncio
 from app.agent_langgraph import build_graph
-from app.github import post_general_pr_comment
+from app.github import post_general_pr_comment,get_latest_commit_sha
 from app.utils import generate_github_markdown_review
 from app.lib.logger import logger  
 
@@ -13,6 +13,7 @@ def analyze_pr_task(self, repo_url, pr_number, github_token):
         logger.info(f"Starting analyze_pr_task for repo_url={repo_url}, pr_number={pr_number}")
         owner, repo = parse_repo_url(repo_url)
         logger.info(f"Parsed repo: owner={owner}, repo={repo}")
+        commit_sha = get_latest_commit_sha(owner, repo, pr_number, github_token)
 
         async def gather_code():
             files_info = await fetch_pr_files(owner, repo, pr_number, github_token)
@@ -20,7 +21,7 @@ def analyze_pr_task(self, repo_url, pr_number, github_token):
             all_files = []
             for f in files_info:
                 file_path = f["filename"]
-                content = await fetch_file_content(owner, repo, file_path, github_token)
+                content = await fetch_file_content(owner, repo, file_path, commit_sha, github_token)
                 logger.info(f"Fetched content for file: {file_path}")
                 all_files.append({"filename": file_path, "content": content, "owner": owner, "repo": repo, "pr_number": pr_number})
             return all_files
@@ -32,8 +33,6 @@ def analyze_pr_task(self, repo_url, pr_number, github_token):
         logger.info("Graph built, invoking...")
         final_state = graph.invoke(state)
         logger.info("Graph execution complete.")
-
-        # markdown_comments = code_review_json_to_markdown(final_state["results"])
         markdown_comments = generate_github_markdown_review(final_state['results'])
         logger.info("Posting general PR comment with markdown summary.")
         post_general_pr_comment(owner, repo, pr_number, str(markdown_comments), github_token)

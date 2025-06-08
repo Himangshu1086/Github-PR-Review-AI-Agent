@@ -1,10 +1,11 @@
 import pytest
-from unittest.mock import patch, MagicMock
-from app.agent_langgraph import analyze_file
 from app.prompt import make_review_prompt
-import pytest
 from app.agent_langgraph import collect_result
 from app.agent_langgraph import cleanup_state
+import json
+from unittest.mock import patch, MagicMock
+from app.agent_langgraph import analyze_file
+
 
 
 @pytest.fixture
@@ -12,42 +13,96 @@ def sample_state():
     return {
         "current_file": {
             "filename": "sample.py",
-            "content": "print('hello')",
+            "content": "\n".join([f"line {i}" for i in range(1000)]),  # triggers chunking
             "owner": "octocat",
             "repo": "test-repo",
             "pr_number": 42
         }
     }
 
-# ✅ Test: Success case
+# ✅ Success: Multiple chunks processed with valid JSON
 @patch("langchain_openai.ChatOpenAI.invoke")
 @patch("app.agent_langgraph.make_review_prompt", wraps=make_review_prompt)
-def test_analyze_file_success(mock_prompt, mock_invoke, sample_state):
-    mock_invoke.return_value.content = '{"files": [], "summary": {"total_issues": 0}}'
+def test_analyze_file_success_multiple_chunks(mock_prompt, mock_invoke, sample_state):
+    mock_invoke.return_value.content = '{"files": [], "summary": {"total_issues": 0, "critical_issues": 0}}'
 
     result = analyze_file(sample_state)
-
     assert "current_result" in result
     assert result["current_result"]["filename"] == "sample.py"
-    assert isinstance(result["current_result"]["code_review"], dict)
-    mock_prompt.assert_called_once()
-    mock_invoke.assert_called_once()
+    assert isinstance(result["current_result"]["code_review"], list)
+    assert all(isinstance(c, dict) for c in result["current_result"]["code_review"])
+    assert mock_invoke.call_count >= 2  # multiple chunks
+    assert mock_prompt.call_count == mock_invoke.call_count
 
-# ❌ Test: LLM returns invalid JSON
-@patch("langchain_openai.ChatOpenAI.invoke")
-def test_analyze_file_json_error(mock_invoke, sample_state):
-    mock_invoke.return_value.content = "invalid json"
-
+# ❌ LLM returns invalid JSON for one chunk
+@patch("langchain_openai.ChatOpenAI.invoke", side_effect=[
+    MagicMock(content='{"files": [], "summary": {"total_issues": 1, "critical_issues": 0}}'),
+    MagicMock(content="INVALID_JSON")
+])
+def test_analyze_file_partial_invalid_json(mock_invoke, sample_state):
     result = analyze_file(sample_state)
-    assert "current_result" in result
-    assert "Expecting value" in result["current_result"]["code_review"]
+    reviews = result["current_result"]["code_review"]
+    assert isinstance(reviews, list)
+    # Fix: Ensure fallback chunk error is preserved
+    assert any(isinstance(chunk, dict) and "error" in chunk for chunk in reviews)
 
-# ❌ Test: LLM throws an exception
-@patch("langchain_openai.ChatOpenAI.invoke", side_effect=Exception("LLM unavailable"))
-def test_analyze_file_invoke_exception(mock_invoke, sample_state):
+
+# ❌ Entire prompt call fails (simulate LLM crash)
+@patch("langchain_openai.ChatOpenAI.invoke", side_effect=Exception("LLM crashed"))
+def test_analyze_file_invoke_crash(mock_invoke, sample_state):
     result = analyze_file(sample_state)
+    reviews = result["current_result"]["code_review"]
+    assert isinstance(reviews, str) or isinstance(reviews, list)
+    
+    # If returned as a str due to total failure
+    if isinstance(reviews, str):
+        assert "LLM crashed" in reviews
+    else:
+        assert any("LLM crashed" in json.dumps(chunk) for chunk in reviews)
+
+
+def test_analyze_file_single_chunk(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.content = '{"files": [], "summary": {"total_issues": 0, "critical_issues": 0}}'
+
+    with patch("langchain_openai.ChatOpenAI.invoke", return_value=mock_response):
+        state = {
+            "current_file": {
+                "filename": "quick.py",
+                "content": "print('ok')",
+                "owner": "octocat",
+                "repo": "repo",
+                "pr_number": 1
+            }
+        }
+        result = analyze_file(state)
+        assert result["current_result"]["filename"] == "quick.py"
+
+
+# ✅ Edge Case: Empty file content
+def test_analyze_file_empty_content():
+    state = {
+        "current_file": {
+            "filename": "empty.py",
+            "content": "",
+            "owner": "octocat",
+            "repo": "test-repo",
+            "pr_number": 1
+        }
+    }
+    result = analyze_file(state)
+    assert result["current_result"]["filename"] == "empty.py"
+    assert result["current_result"]["code_review"] == []
+
+# ❌ Critical state missing (missing 'current_file')
+def test_analyze_file_missing_key():
+    bad_state = {}
+    result = analyze_file(bad_state)
     assert "current_result" in result
-    assert "LLM unavailable" in result["current_result"]["code_review"]
+    assert "unknown" in result["current_result"]["filename"]
+    assert "current_file" in result["current_result"]["code_review"]
+
+
 
 
 

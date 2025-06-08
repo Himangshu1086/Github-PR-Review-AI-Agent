@@ -2,7 +2,7 @@ import httpx
 import base64
 from urllib.parse import urlparse
 from dotenv import load_dotenv
-from app.lib.logger import logger  # <-- Add this import
+from app.lib.logger import logger
 load_dotenv()
 
 def parse_repo_url(repo_url):
@@ -16,19 +16,19 @@ async def fetch_pr_files(owner, repo, pr_number, GITHUB_TOKEN):
     logger.info(f"Fetching PR files: {owner}/{repo} PR#{pr_number}")
     async with httpx.AsyncClient() as client:
         resp = await client.get(url,headers={
-            "Authorization": f"{GITHUB_TOKEN}",
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
             "Accept": "application/vnd.github.v3+json"
         })
         logger.info(f"GitHub API GET {url} status: {resp.status_code}")
         resp.raise_for_status()
         return resp.json()
 
-async def fetch_file_content(owner, repo, file_path, GITHUB_TOKEN):
-    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}"
+async def fetch_file_content(owner, repo, file_path, head_sha, GITHUB_TOKEN):
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={head_sha}"
     logger.info(f"Fetching file content: {owner}/{repo}/{file_path}")
     async with httpx.AsyncClient() as client:
         resp = await client.get(url, headers={
-            "Authorization": f"{GITHUB_TOKEN}",
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
             "Accept": "application/vnd.github.v3+json"
         })
         logger.info(f"GitHub API GET {url} status: {resp.status_code}")
@@ -93,7 +93,7 @@ def get_latest_commit_sha(owner, repo, pr_number, GITHUB_TOKEN):
     url = f"https://api.github.com/repos/{owner}/{repo}/pulls/{pr_number}"
     logger.info(f"Fetching latest commit SHA for {owner}/{repo} PR#{pr_number}")
     headers = {
-        "Authorization": f"{GITHUB_TOKEN}",
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json",
     }
     resp = httpx.get(url, headers=headers)
