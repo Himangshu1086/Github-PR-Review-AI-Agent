@@ -14,9 +14,7 @@ bash
 
 `pip install -r requirements.txt`
 
-Then freeze the installed packages:
-
-bash
+you can then pin the versions with :
 
 `pip freeze > requirements.txt`
 
