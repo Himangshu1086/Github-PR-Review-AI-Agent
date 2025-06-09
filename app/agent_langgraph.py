@@ -128,7 +128,7 @@ def build_graph(files: List[Dict]):
     initial_state = {
         "files": files,
         "index": 0,
-        "current_file": files[0],
+        "current_file": files[0] if files else {},
         "results": [],
         # if needed for context
         # "owner": owner,
